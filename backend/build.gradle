@@ -1,0 +1,77 @@
+plugins {
+    id "java"
+    id "org.springframework.boot" version "3.4.5"
+    id "io.spring.dependency-management" version "1.1.7"
+}
+
+group = "com.orderflow"
+version = "0.1.0-SNAPSHOT"
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.testcontainers:testcontainers-bom:2.0.5"
+    }
+}
+
+dependencies {
+    implementation "org.springframework.boot:spring-boot-starter-data-jpa"
+    implementation "org.springframework.boot:spring-boot-starter-data-redis"
+    implementation "org.springframework.boot:spring-boot-starter-actuator"
+    implementation "org.springframework.boot:spring-boot-starter-validation"
+    implementation "org.springframework.boot:spring-boot-starter-web"
+    implementation "org.springframework.kafka:spring-kafka"
+    implementation "org.flywaydb:flyway-core"
+    implementation "org.flywaydb:flyway-database-postgresql"
+    runtimeOnly "org.postgresql:postgresql"
+
+    testImplementation "org.springframework.boot:spring-boot-starter-test"
+    testImplementation platform("org.testcontainers:testcontainers-bom:2.0.5")
+    testImplementation "org.testcontainers:testcontainers-junit-jupiter"
+    testImplementation "org.testcontainers:testcontainers-postgresql"
+}
+
+tasks.named("test") {
+    useJUnitPlatform {
+        excludeTags "benchmark"
+    }
+}
+
+tasks.register("benchmarkOrderCorrectness", Test) {
+    description = "Runs the OrderFlow M2 correctness benchmark for baseline or improved mode."
+    group = "verification"
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags "benchmark"
+    }
+    outputs.upToDateWhen { false }
+    systemProperty "orderflow.benchmark.enabled", "true"
+    systemProperty "orderflow.benchmark.mode", project.findProperty("mode") ?: "improved"
+    systemProperty "orderflow.benchmark.repeatedSubmitAttempts", project.findProperty("repeatedSubmitAttempts") ?: "20"
+    systemProperty "orderflow.benchmark.concurrentAttempts", project.findProperty("concurrentAttempts") ?: "200"
+    systemProperty "orderflow.benchmark.outputDir", project.findProperty("outputDir") ?: "${rootProject.projectDir}/benchmarks/results/full/order-correctness"
+}
+
+tasks.register("benchmarkAsyncReliability", Test) {
+    description = "Runs the OrderFlow M3 async reliability benchmark for direct or outbox-kafka mode."
+    group = "verification"
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags "async-benchmark"
+    }
+    outputs.upToDateWhen { false }
+    systemProperty "orderflow.async.benchmark.enabled", "true"
+    systemProperty "orderflow.async.benchmark.mode", project.findProperty("mode") ?: "outbox-kafka"
+    systemProperty "orderflow.async.benchmark.syntheticOrders", project.findProperty("syntheticOrders") ?: "50"
+    systemProperty "orderflow.async.benchmark.outputDir", project.findProperty("outputDir") ?: "${rootProject.projectDir}/benchmarks/results/full/async-reliability"
+}
